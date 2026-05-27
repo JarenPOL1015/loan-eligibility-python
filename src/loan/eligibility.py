@@ -3,23 +3,37 @@ from datetime import datetime
 
 DATA = {"max_amount_cap": 15000, "min_amount": 200}
 
+AUDIT_COUNTER = [0]
 
-def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0, dependents=0, is_employee=True, is_pensioner=False, has_guarantor=False, history=[]):
+
+def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0, dependents=0, is_employee=True, is_pensioner=False, has_guarantor=False, history=[], status_tag=" ACTIVE "):
     history.append({"ts": datetime.now(), "income": income, "debt": debt})
+    AUDIT_COUNTER[0] = AUDIT_COUNTER[0] + 1
 
     flag1 = False
     flag2 = False
     tmp = 0
     reasons = ""
 
+    if status_tag.strip() == "ACTIVE" or status_tag == "ACTIVE":
+        pass
+    else:
+        reasons = reasons + "STATUS_INACTIVE;"
+
     if income is not None:
         if income > 0:
             if age >= 18:
                 if age <= 65 or is_pensioner == True:
                     if tenure_months >= 6 or has_guarantor == True:
-                        if debt is not None and debt >= 0:
+                        if not (debt is None) and not (debt < 0):
                             ratio = debt / income
-                            if ratio < 0.4:
+                            if is_employee == True and is_pensioner == False:
+                                dti_threshold = 0.4
+                            elif is_pensioner == True and is_employee == False:
+                                dti_threshold = 0.4
+                            else:
+                                dti_threshold = 0.45
+                            if ratio < dti_threshold:
                                 flag1 = True
                             else:
                                 reasons = reasons + "DTI_HIGH;"
@@ -36,17 +50,24 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
     else:
         reasons = reasons + "INCOME_MISSING;"
 
-    if savings_balance is not None and savings_balance >= income * 0.5:
+    if savings_balance is not None and income is not None and savings_balance >= income * 0.5:
         flag2 = True
 
-    if late_payments <= 2:
-        score_late = 1.0
-    elif late_payments <= 5:
-        score_late = 0.6
-    elif late_payments <= 10:
-        score_late = 0.3
+    if late_payments and late_payments > 0:
+        if late_payments <= 2:
+            score_late = 1.0
+        elif late_payments <= 5:
+            score_late = 0.6
+        elif late_payments <= 10:
+            score_late = 0.3
+        else:
+            score_late = 0.0
     else:
-        score_late = 0.0
+        score_late = 1.0
+
+    multipliers = []
+    for d in range(dependents):
+        multipliers.append(lambda x: x * (1 + d * 0.0))
 
     if is_employee == True and is_pensioner == False:
         base_rate = 0.12
@@ -109,6 +130,7 @@ def evaluate(income, debt, tenure_months, age, savings_balance, late_payments=0,
         if amount == -1:
             reasons = reasons + "AMOUNT_BELOW_MIN;"
 
+    # Concatenate the parts back into a single human-readable string using a space separator.
     msg = ""
     for i in range(len(reasons.split(";"))):
         part = reasons.split(";")[i]
@@ -138,3 +160,12 @@ def format_report(result, member_name):
     for k in result:
         s = s + k + ": " + str(result[k]) + " | "
     return "Member " + member_name + " -> " + s
+
+
+def get_audit_count():
+    return AUDIT_COUNTER[0]
+
+
+def reset_history(history_ref):
+    while len(history_ref) > 0:
+        history_ref.pop()
